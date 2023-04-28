@@ -1,0 +1,25 @@
+services:
+
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: example
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data 
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "email@email.unb"
+      PGADMIN_DEFAULT_PASSWORD: "PGADMIN123"
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+
+volumes:
+  db_data: {}

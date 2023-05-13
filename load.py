@@ -1,5 +1,6 @@
 import pandas as pd
 import sys
+import psycopg
 
 
 def load_local(fileName):
@@ -46,7 +47,7 @@ def load_local(fileName):
 # "Identificador do processo de viagem";"N�mero da Proposta (PCDP)";"Situa��o";"Viagem Urgente";"Justificativa Urg�ncia Viagem";"C�digo do �rg�o superior";"Nome do �rg�o superior";"C�digo �rg�o solicitante";"Nome �rg�o solicitante";"CPF viajante";"Nome";"Cargo";"Fun��o";"Descri��o Fun��o";"Per�odo - Data de in�cio";"Per�odo - Data de fim";"Destinos";"Motivo";"Valor di�rias";"Valor passagens";"Valor devolu��o";"Valor outros gastos"
 
 
-def load_orgao(pagamentoFileName, viagemFileName):
+def load_orgao(pagamentoFileName, viagemFileName, cursor):
     pagamento_df = pd.read_csv(pagamentoFileName, sep=";", encoding="latin-1")
     viagem_df = pd.read_csv(viagemFileName, sep=";", encoding="latin-1")
 
@@ -55,7 +56,11 @@ def load_orgao(pagamentoFileName, viagemFileName):
         ["Codigo do órgão pagador", "Nome do órgao pagador", "Código do órgão superior"]
     ]
     ug_pag = pagamento_df[
-        ["Código da unidade gestora pagadora", "Nome da unidade gestora pagadora"]
+        [
+            "Código da unidade gestora pagadora",
+            "Nome da unidade gestora pagadora",
+            "Código do órgão superior",
+        ]
     ]
 
     v_org_sup = viagem_df[["Código do órgão superior", "Nome do órgão superior"]]
@@ -69,7 +74,7 @@ def load_orgao(pagamentoFileName, viagemFileName):
 
     org_sup.columns = ["codigo", "nome"]
     org_pag.columns = ["codigo", "nome", "orgao_superior"]
-    ug_pag.columns = ["codigo", "nome"]
+    ug_pag.columns = ["codigo", "nome", "orgao_superior"]
     v_org_sup.columns = ["codigo", "nome"]
     v_org_sol.columns = ["codigo", "nome", "orgao_superior"]
 
@@ -82,7 +87,10 @@ def load_orgao(pagamentoFileName, viagemFileName):
 
     merge["data_hora_criacao"] = pd.Timestamp.now()
 
-    print(merge.head(10))
+    # cursor.execute(
+    #     "INSERT INTO orgao (nome, codigo, orgao_superior) VALUES (%s, %s, %s)",
+    #     list(zip(*map(merge.get, ["codigo", "nome", "orgao_superior"]))),
+    # )
 
     pass
 
@@ -92,14 +100,19 @@ def load_cargo(fileName):
 
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv
-def load_data(fileNames):
+def load_data(fileNames, cursor):
     # load_local(fileNames[1])
-    load_orgao(fileNames[0], fileNames[3])
+    load_orgao(fileNames[0], fileNames[3], cursor)
     pass
 
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv em ordem
 if __name__ == "__main__":
     # get from command line
-    fileNames = sys.argv[1:]
-    load_data(fileNames)
+    fileNames = sys.argv[1:-1]
+    conn_url = sys.argv[-1]
+    cursor = {}
+    # with psycopg.connect(conn_url) as conn:
+    #     with conn.cursor() as cursor:
+    #         load_data(fileNames, cursor)
+    load_data(fileNames, cursor)

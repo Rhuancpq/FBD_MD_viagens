@@ -22,33 +22,33 @@ CREATE TYPE "tipo_pagamento" AS ENUM (
 );
 
 CREATE TABLE "local" (
-  "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "id" SERIAL PRIMARY KEY,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "cidade" varchar NOT NULL,
-  "estado" varchar NOT NULL,
+  "estado" varchar,
   "pais" varchar NOT NULL
 );
 
 CREATE TABLE "orgao" (
-  "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "id" SERIAL PRIMARY KEY,
+  "codigo" integer NOT NULL,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "nome" varchar NOT NULL,
-  "codigo" varchar UNIQUE NOT NULL,
   "orgao_superior" integer,
-  FOREIGN KEY ("orgao_superior") REFERENCES "orgao" ("id")
+  CONSTRAINT orgao_orgao_sup_fk FOREIGN KEY ("orgao_superior") REFERENCES "orgao" ("id")
 );
 
 CREATE TABLE "cargo" (
-  "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "id" SERIAL PRIMARY KEY,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "nome" varchar NOT NULL,
   "orgao_id" integer NOT NULL,
   FOREIGN KEY ("orgao_id") REFERENCES "orgao" ("id")
 );
 
 CREATE TABLE "funcao" (
-  "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "id" SERIAL PRIMARY KEY,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "nome" varchar NOT NULL,
   "orgao_id" integer NOT NULL,
   FOREIGN KEY ("orgao_id") REFERENCES "orgao" ("id")
@@ -56,7 +56,7 @@ CREATE TABLE "funcao" (
 
 CREATE TABLE "servidor" (
   "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "nome" varchar NOT NULL,
   "cargo_id" integer,
   "funcao_id" integer,
@@ -68,7 +68,7 @@ CREATE TABLE "servidor" (
 
 CREATE TABLE "viagem" (
   "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "id_processo" varchar UNIQUE NOT NULL,
   "numero_proposta" varchar NOT NULL,
   "situacao" situacao_viagem NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE "viagem" (
 
 CREATE TABLE "passagem" (
   "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "viagem_id" integer NOT NULL,
   "local_origem_ida_id" integer NOT NULL,
   "local_destino_ida_id" integer NOT NULL,
@@ -91,7 +91,7 @@ CREATE TABLE "passagem" (
   "local_destino_volta_id" integer NOT NULL,
   "valor" float NOT NULL DEFAULT 0,
   "taxa_servico" float NOT NULL DEFAULT 0,
-  "data_hora_emissao" timestamp NOT NULL,
+  "data_hora_emissao" timestamp,
   FOREIGN KEY ("viagem_id") REFERENCES "viagem" ("id") ON DELETE CASCADE,
   FOREIGN KEY ("local_origem_ida_id") REFERENCES "local" ("id"),
   FOREIGN KEY ("local_origem_volta_id") REFERENCES "local" ("id"),
@@ -101,7 +101,7 @@ CREATE TABLE "passagem" (
 
 CREATE TABLE "trecho" (
   "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "passagem_id" integer NOT NULL,
   "local_origem_id" integer NOT NULL,
   "data_origem" date NOT NULL,
@@ -117,7 +117,7 @@ CREATE TABLE "trecho" (
 
 CREATE TABLE "pagamento" (
   "id" integer PRIMARY KEY,
-  "data_hora_criacao" timestamp NOT NULL,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "viagem_id" integer NOT NULL,
   "orgao_pagador_id" integer NOT NULL,
   "tipo_pagamento" tipo_pagamento,

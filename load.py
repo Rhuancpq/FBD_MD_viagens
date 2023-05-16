@@ -1,9 +1,10 @@
 import pandas as pd
 import sys
 import psycopg
+import numpy as np
 
 
-def load_local(fileName):
+def load_local(fileName, cursor):
     df = pd.read_csv(fileName, sep=";", encoding="latin-1")
     orig_ida = df[["País - Origem ida", "UF - Origem ida", "Cidade - Origem ida"]]
     orig_volta = df[
@@ -23,11 +24,14 @@ def load_local(fileName):
 
     local = local.drop_duplicates()
 
-    local["data_hora_criacao"] = pd.Timestamp.now()
+    local["estado"] = np.where(local["estado"].isnull(), None, local["estado"])
 
     print(local.head(10))
 
-    pass
+    cursor.executemany(
+        "INSERT INTO local (pais, estado, cidade) VALUES (%s, %s, %s)",
+        list(zip(*map(local.get, ["pais", "estado", "cidade"]))),
+    )
 
 
 # CREATE TABLE "orgao" (
@@ -85,11 +89,33 @@ def load_orgao(pagamentoFileName, viagemFileName, cursor):
 
     merge = merge.drop_duplicates()
 
-    merge["data_hora_criacao"] = pd.Timestamp.now()
+    merge = merge.drop(merge[merge["codigo"] == -3].index)
 
-    # cursor.execute(
+    nulls = merge[merge["orgao_superior"].isnull()]
+
+    print(nulls[nulls["codigo"] == -1])
+
+    print(nulls[nulls["nome"] == "Sem informação"])
+
+    cursor.execute("ALTER TABLE orgao DISABLE TRIGGER ALL")
+
+    # cursor.executemany(
+    #     "INSERT INTO orgao (nome, codigo) VALUES (%s, %s)",
+    #     list(zip(*map(nulls.get, ["nome", "codigo"]))),
+    # )
+
+    cursor.execute("ALTER TABLE orgao ENABLE TRIGGER ALL")
+
+    groups = merge.groupby("codigo")
+    # filter groups with more than one element
+    groups = groups.filter(lambda x: len(x) > 1)
+    print(groups.head(10))
+
+    merge = merge[merge["orgao_superior"].notnull()]
+
+    # cursor.executemany(
     #     "INSERT INTO orgao (nome, codigo, orgao_superior) VALUES (%s, %s, %s)",
-    #     list(zip(*map(merge.get, ["codigo", "nome", "orgao_superior"]))),
+    #     list(zip(*map(merge.get, ["nome", "codigo", "orgao_superior"]))),
     # )
 
     pass
@@ -101,18 +127,18 @@ def load_cargo(fileName):
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv
 def load_data(fileNames, cursor):
-    # load_local(fileNames[1])
+    # load_local(fileNames[1], cursor)
     load_orgao(fileNames[0], fileNames[3], cursor)
     pass
 
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv em ordem
+# python3 load.py 2022_Pagamento.csv 2022_Passagem.csv 2022_Trecho.csv 2022_Viagem.csv postgresql://postgres:example@localhost:5432/viagens
 if __name__ == "__main__":
     # get from command line
     fileNames = sys.argv[1:-1]
     conn_url = sys.argv[-1]
     cursor = {}
-    # with psycopg.connect(conn_url) as conn:
-    #     with conn.cursor() as cursor:
-    #         load_data(fileNames, cursor)
-    load_data(fileNames, cursor)
+    with psycopg.connect(conn_url) as conn:
+        with conn.cursor() as cursor:
+            load_data(fileNames, cursor)

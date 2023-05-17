@@ -64,8 +64,8 @@ CREATE TABLE "servidor" (
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "cpf" varchar,
   "nome" varchar NOT NULL,
-  "cargo_id" bigint,
-  "funcao_id" bigint,
+  "cargo_id" integer,
+  "funcao_id" integer,
   FOREIGN KEY ("cargo_id") REFERENCES "cargo" ("id"),
   FOREIGN KEY ("funcao_id") REFERENCES "funcao" ("id")
 );

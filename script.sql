@@ -29,13 +29,18 @@ CREATE TABLE "local" (
   "pais" varchar NOT NULL
 );
 
-CREATE TABLE "orgao" (
-  "id" SERIAL PRIMARY KEY,
-  "codigo" integer NOT NULL,
+CREATE TABLE "orgao_superior" (
+  "codigo" integer PRIMARY KEY,
+  "data_hora_criacao" timestamp DEFAULT current_timestamp,
+  "nome" varchar NOT NULL
+);
+
+CREATE TABLE "orgao_subordinado" (
+  "codigo" integer PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "nome" varchar NOT NULL,
   "orgao_superior" integer,
-  CONSTRAINT orgao_orgao_sup_fk FOREIGN KEY ("orgao_superior") REFERENCES "orgao" ("id")
+  CONSTRAINT orgao_orgao_sup_fk FOREIGN KEY ("orgao_superior") REFERENCES "orgao_superior" ("codigo")
 );
 
 CREATE TABLE "cargo" (
@@ -43,7 +48,7 @@ CREATE TABLE "cargo" (
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "nome" varchar NOT NULL,
   "orgao_id" integer NOT NULL,
-  FOREIGN KEY ("orgao_id") REFERENCES "orgao" ("id")
+  FOREIGN KEY ("orgao_id") REFERENCES "orgao_subordinado" ("codigo")
 );
 
 CREATE TABLE "funcao" (
@@ -51,23 +56,22 @@ CREATE TABLE "funcao" (
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "nome" varchar NOT NULL,
   "orgao_id" integer NOT NULL,
-  FOREIGN KEY ("orgao_id") REFERENCES "orgao" ("id")
+  FOREIGN KEY ("orgao_id") REFERENCES "orgao_subordinado" ("codigo")
 );
 
 CREATE TABLE "servidor" (
-  "id" integer PRIMARY KEY,
+  "id" SERIAL PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
+  "cpf" varchar,
   "nome" varchar NOT NULL,
-  "cargo_id" integer,
-  "funcao_id" integer,
-  "orgao_id" integer NOT NULL,
+  "cargo_id" bigint,
+  "funcao_id" bigint,
   FOREIGN KEY ("cargo_id") REFERENCES "cargo" ("id"),
-  FOREIGN KEY ("funcao_id") REFERENCES "funcao" ("id"),
-  FOREIGN KEY ("orgao_id") REFERENCES "orgao" ("id")
+  FOREIGN KEY ("funcao_id") REFERENCES "funcao" ("id")
 );
 
 CREATE TABLE "viagem" (
-  "id" integer PRIMARY KEY,
+  "id" SERIAL PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "id_processo" varchar UNIQUE NOT NULL,
   "numero_proposta" varchar NOT NULL,
@@ -82,7 +86,7 @@ CREATE TABLE "viagem" (
 );
 
 CREATE TABLE "passagem" (
-  "id" integer PRIMARY KEY,
+  "id" SERIAL PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "viagem_id" integer NOT NULL,
   "local_origem_ida_id" integer NOT NULL,
@@ -100,7 +104,7 @@ CREATE TABLE "passagem" (
 );
 
 CREATE TABLE "trecho" (
-  "id" integer PRIMARY KEY,
+  "id" SERIAL PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "passagem_id" integer NOT NULL,
   "local_origem_id" integer NOT NULL,
@@ -116,12 +120,12 @@ CREATE TABLE "trecho" (
 );
 
 CREATE TABLE "pagamento" (
-  "id" integer PRIMARY KEY,
+  "id" SERIAL PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "viagem_id" integer NOT NULL,
   "orgao_pagador_id" integer NOT NULL,
   "tipo_pagamento" tipo_pagamento,
   "valor" float NOT NULL DEFAULT 0,
   FOREIGN KEY ("viagem_id") REFERENCES "viagem" ("id") ON DELETE CASCADE,
-  FOREIGN KEY ("orgao_pagador_id") REFERENCES "orgao" ("id")
+  FOREIGN KEY ("orgao_pagador_id") REFERENCES "orgao_subordinado" ("codigo")
 );

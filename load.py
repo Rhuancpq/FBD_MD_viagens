@@ -51,7 +51,7 @@ def load_local(fileName, cursor):
 # "Identificador do processo de viagem";"N�mero da Proposta (PCDP)";"Situa��o";"Viagem Urgente";"Justificativa Urg�ncia Viagem";"C�digo do �rg�o superior";"Nome do �rg�o superior";"C�digo �rg�o solicitante";"Nome �rg�o solicitante";"CPF viajante";"Nome";"Cargo";"Fun��o";"Descri��o Fun��o";"Per�odo - Data de in�cio";"Per�odo - Data de fim";"Destinos";"Motivo";"Valor di�rias";"Valor passagens";"Valor devolu��o";"Valor outros gastos"
 
 
-def load_orgao(pagamentoFileName, viagemFileName, cursor):
+def load_servidor(pagamentoFileName, viagemFileName, cursor):
     pagamento_df = pd.read_csv(pagamentoFileName, sep=";", encoding="latin-1")
     viagem_df = pd.read_csv(viagemFileName, sep=";", encoding="latin-1")
 
@@ -82,43 +82,114 @@ def load_orgao(pagamentoFileName, viagemFileName, cursor):
     v_org_sup.columns = ["codigo", "nome"]
     v_org_sol.columns = ["codigo", "nome", "orgao_superior"]
 
-    org_sup["orgao_superior"] = None
-    v_org_sup["orgao_superior"] = None
+    group_orgs = pd.concat([org_pag, v_org_sol, ug_pag])
 
-    merge = pd.concat([org_sup, v_org_sup, v_org_sol, org_pag])
+    group_orgs = group_orgs.drop_duplicates()
 
-    merge = merge.drop_duplicates()
+    print("Órgãos agrupados")
+    print(group_orgs[group_orgs["codigo"] == -1])
+    print(group_orgs[group_orgs["codigo"] == -3])
+    print(group_orgs[group_orgs["nome"].isnull()])
 
-    merge = merge.drop(merge[merge["codigo"] == -3].index)
+    group_orgs = group_orgs.drop(group_orgs[group_orgs["nome"].isnull()].index)
 
-    nulls = merge[merge["orgao_superior"].isnull()]
+    sup_orgs = pd.concat([org_sup, v_org_sup])
 
-    print(nulls[nulls["codigo"] == -1])
+    sup_orgs = sup_orgs.drop_duplicates()
 
-    print(nulls[nulls["nome"] == "Sem informação"])
+    print(sup_orgs[sup_orgs["codigo"] == -1])
 
-    cursor.execute("ALTER TABLE orgao DISABLE TRIGGER ALL")
+    sup_orgs.drop(sup_orgs[sup_orgs["nome"] == "Sem informação"].index, inplace=True)
 
-    # cursor.executemany(
-    #     "INSERT INTO orgao (nome, codigo) VALUES (%s, %s)",
-    #     list(zip(*map(nulls.get, ["nome", "codigo"]))),
-    # )
+    cursor.executemany(
+        "INSERT INTO orgao_superior (nome, codigo) VALUES (%s, %s)",
+        list(zip(*map(sup_orgs.get, ["nome", "codigo"]))),
+    )
 
-    cursor.execute("ALTER TABLE orgao ENABLE TRIGGER ALL")
+    cursor.executemany(
+        "INSERT INTO orgao_subordinado (nome, codigo, orgao_superior) VALUES (%s, %s, %s)",
+        list(zip(*map(group_orgs.get, ["nome", "codigo", "orgao_superior"]))),
+    )
 
-    groups = merge.groupby("codigo")
-    # filter groups with more than one element
-    groups = groups.filter(lambda x: len(x) > 1)
-    print(groups.head(10))
+    cargo_df = viagem_df[["Cargo", "Código órgão solicitante"]]
 
-    merge = merge[merge["orgao_superior"].notnull()]
+    cargo_df.columns = ["nome", "orgao_superior"]
 
-    # cursor.executemany(
-    #     "INSERT INTO orgao (nome, codigo, orgao_superior) VALUES (%s, %s, %s)",
-    #     list(zip(*map(merge.get, ["nome", "codigo", "orgao_superior"]))),
-    # )
+    cargo_df = cargo_df.drop_duplicates()
 
-    pass
+    cargo_df = cargo_df.dropna()
+
+    cargo_df.reset_index(inplace=True, drop=True)
+
+    funcao_df = viagem_df[["Função", "Código órgão solicitante"]]
+
+    funcao_df.columns = ["nome", "orgao_superior"]
+
+    funcao_df = funcao_df.drop_duplicates()
+
+    funcao_df = funcao_df.dropna()
+
+    funcao_df.reset_index(inplace=True, drop=True)
+
+    cursor.executemany(
+        "INSERT INTO cargo (nome, orgao_id) VALUES (%s, %s)",
+        list(zip(*map(cargo_df.get, ["nome", "orgao_superior"]))),
+    )
+
+    cursor.executemany(
+        "INSERT INTO funcao (nome, orgao_id) VALUES (%s, %s)",
+        list(zip(*map(funcao_df.get, ["nome", "orgao_superior"]))),
+    )
+
+    cargos_db = cursor.execute("SELECT id, nome, orgao_id FROM cargo").fetchall()
+
+    cargos_db = pd.DataFrame(cargos_db, columns=["id", "nome", "orgao_id"])
+
+    funcoes_db = cursor.execute("SELECT id, nome, orgao_id FROM funcao").fetchall()
+
+    funcoes_db = pd.DataFrame(funcoes_db, columns=["id", "nome", "orgao_id"])
+
+    servidor_df = viagem_df[
+        ["Nome", "CPF viajante", "Cargo", "Função", "Código órgão solicitante"]
+    ]
+
+    servidor_df.columns = ["nome", "cpf", "cargo", "funcao", "orgao_id"]
+
+    servidor_df = servidor_df.drop_duplicates()
+
+    reverse_cargos = cargos_db.set_index(["nome", "orgao_id"]).to_dict()["id"]
+
+    reverse_funcoes = funcoes_db.set_index(["nome", "orgao_id"]).to_dict()["id"]
+
+    servidor_df["cargo_id"] = servidor_df.apply(
+        lambda row: reverse_cargos[(row["cargo"], row["orgao_id"])]
+        if (row["cargo"], row["orgao_id"]) in reverse_cargos
+        else None,
+        axis=1,
+    )
+
+    servidor_df["funcao_id"] = servidor_df.apply(
+        lambda row: reverse_funcoes[(row["funcao"], row["orgao_id"])]
+        if (row["funcao"], row["orgao_id"]) in reverse_funcoes
+        else None,
+        axis=1,
+    )
+
+    servidor_df = servidor_df.replace({np.nan: None})
+
+    cursor.executemany(
+        """
+        INSERT INTO servidor (nome, cpf, cargo_id, funcao_id)
+        VALUES (%s, %s, %s, %s)""",
+        list(
+            zip(
+                *map(
+                    servidor_df.get,
+                    ["nome", "cpf", "cargo_id", "funcao_id"],
+                )
+            )
+        ),
+    )
 
 
 def load_cargo(fileName):
@@ -128,7 +199,7 @@ def load_cargo(fileName):
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv
 def load_data(fileNames, cursor):
     # load_local(fileNames[1], cursor)
-    load_orgao(fileNames[0], fileNames[3], cursor)
+    load_servidor(fileNames[0], fileNames[3], cursor)
     pass
 
 

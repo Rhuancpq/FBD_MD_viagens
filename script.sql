@@ -12,13 +12,17 @@ CREATE TYPE "meio_transporte" AS ENUM (
   'RODOVIARIO',
   'FLUVIAL',
   'VEICULO_PROPRIO',
-  'VEICULO_OFICIAL'
+  'VEICULO_OFICIAL',
+  'MARITIMO',
+  'FERROVIARIO',
+  'INVALIDO'
 );
 
 CREATE TYPE "tipo_pagamento" AS ENUM (
   'PASSAGEM',
   'DIARIAS',
-  'SEGURO'
+  'SERVICO_CORRELATO_SEGURO',
+  'RESTITUICAO'
 );
 
 CREATE TABLE "local" (
@@ -93,6 +97,7 @@ CREATE TABLE "passagem" (
   "local_destino_ida_id" integer,
   "local_origem_volta_id" integer,
   "local_destino_volta_id" integer,
+  "meio_transporte" meio_transporte,
   "valor" float NOT NULL DEFAULT 0,
   "taxa_servico" float NOT NULL DEFAULT 0,
   "data_hora_emissao" timestamp,
@@ -115,8 +120,8 @@ CREATE TABLE "trecho" (
   "numero_diarias" float,
   "missao" boolean NOT NULL DEFAULT false,
   FOREIGN KEY ("local_origem_id") REFERENCES "local" ("id"),
-  FOREIGN KEY ("local_destino_id") REFERENCES "local" ("id")
-  FOREIGN KEY ("viagem_id") REFERENCES "viagem" ("id") ON DELETE CASCADE,
+  FOREIGN KEY ("local_destino_id") REFERENCES "local" ("id"),
+  FOREIGN KEY ("viagem_id") REFERENCES "viagem" ("id") ON DELETE CASCADE
 );
 
 CREATE TABLE "pagamento" (

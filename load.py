@@ -3,6 +3,7 @@ import sys
 import psycopg
 import numpy as np
 from datetime import datetime
+from unidecode import unidecode
 
 
 # trecos.csv head:
@@ -83,6 +84,8 @@ def load_viagens(pagamentoFileName, viagemFileName, cursor):
     group_orgs = pd.concat([org_pag, v_org_sol, ug_pag])
 
     group_orgs = group_orgs.drop_duplicates()
+
+    group_orgs.reset_index(inplace=True, drop=True)
 
     print("Órgãos agrupados")
     print(group_orgs[group_orgs["codigo"] == -1])
@@ -445,45 +448,239 @@ def load_others(passagemFileName, trechoFileName, pagamentoFileName, cursor):
 
     passagem_df["taxa_servico"] = passagem_df["taxa_servico"].astype(float)
 
-    print(passagem_df.head(5))
+    passagem_df["meio_transporte"] = passagem_df["meio_transporte"].apply(
+        # upper, replace spaces with underscores and remove accents
+        lambda x: unidecode(x.upper()).replace(" ", "_")
+    )
 
-    # cursor.executemany(
-    #     """
-    #     INSERT INTO passagem (viagem_id, local_origem_ida_id,
-    #     local_destino_ida_id, local_origem_volta_id, local_destino_volta_id,
-    #     valor, taxa_servico, data_hora_emissao)
-    #     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    #     """,
-    #     list(
-    #         zip(
-    #             *map(
-    #                 passagem_df.get,
-    #                 [
-    #                     "viagem_id",
-    #                     "local_origem_ida_id",
-    #                     "local_destino_ida_id",
-    #                     "local_origem_volta_id",
-    #                     "local_destino_volta_id",
-    #                     "valor_passagem",
-    #                     "taxa_servico",
-    #                     "data_hora_emissao",
-    #                 ],
-    #             )
-    #         )
-    #     ),
-    # )
+    passagem_df = passagem_df.replace({np.nan: None})
 
-    # TODO trecho
+    cursor.executemany(
+        """
+        INSERT INTO passagem (viagem_id, local_origem_ida_id,
+        local_destino_ida_id, local_origem_volta_id, local_destino_volta_id,
+        valor, taxa_servico, data_hora_emissao, meio_transporte)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        list(
+            zip(
+                *map(
+                    passagem_df.get,
+                    [
+                        "viagem_id",
+                        "local_origem_ida_id",
+                        "local_destino_ida_id",
+                        "local_origem_volta_id",
+                        "local_destino_volta_id",
+                        "valor_passagem",
+                        "taxa_servico",
+                        "data_hora_emissao",
+                        "meio_transporte",
+                    ],
+                )
+            )
+        ),
+    )
+
     trecho_df = pd.read_csv(trechoFileName, sep=";", encoding="latin-1")
 
-    # TODO pagamento
+    # "Identificador do processo de viagem ";"N�mero da Proposta (PCDP)";"Sequ�ncia Trecho";"Origem - Data";"Origem - Pa�s";"Origem - UF";"Origem - Cidade";"Destino - Data";"Destino - Pa�s";"Destino - UF";"Destino - Cidade";"Meio de transporte";"N�mero Di�rias";"Missao?"
+
+    trecho_df.columns = [
+        "id_processo",
+        "pcdp",
+        "sequencia_trecho",
+        "data_origem",
+        "pais_origem",
+        "uf_origem",
+        "cidade_origem",
+        "data_destino",
+        "pais_destino",
+        "uf_destino",
+        "cidade_destino",
+        "meio_transporte",
+        "numero_diarias",
+        "missao",
+    ]
+
+    trecho_df["data_origem"] = trecho_df["data_origem"].apply(
+        lambda x: datetime.strptime(x, "%d/%m/%Y").date()
+    )
+
+    trecho_df["data_destino"] = trecho_df["data_destino"].apply(
+        lambda x: datetime.strptime(x, "%d/%m/%Y").date()
+    )
+
+    trecho_df["meio_transporte"] = trecho_df["meio_transporte"].apply(
+        # upper, replace spaces with underscores and remove accents
+        lambda x: unidecode(x.upper()).replace(" ", "_")
+    )
+
+    trecho_df["missao"] = trecho_df["missao"].apply(
+        lambda x: True if x == "Sim" else False
+    )
+
+    trecho_df = trecho_df.replace({np.nan: None})
+
+    trecho_df["viagem_id"] = trecho_df.apply(
+        lambda row: reverse_viagem[str(row["id_processo"])]
+        if str(row["id_processo"]) in reverse_viagem
+        else None,
+        axis=1,
+    )
+
+    trecho_df = trecho_df.dropna(subset=["viagem_id"])
+
+    trecho_df["viagem_id"] = trecho_df["viagem_id"].astype(int)
+
+    trecho_df["local_origem_id"] = trecho_df.apply(
+        lambda row: reverse_local[
+            (
+                row["cidade_origem"],
+                row["uf_origem"],
+                row["pais_origem"],
+            )
+        ]
+        if (
+            row["cidade_origem"],
+            row["uf_origem"],
+            row["pais_origem"],
+        )
+        in reverse_local
+        else None,
+        axis=1,
+    )
+
+    trecho_df["local_destino_id"] = trecho_df.apply(
+        lambda row: reverse_local[
+            (
+                row["cidade_destino"],
+                row["uf_destino"],
+                row["pais_destino"],
+            )
+        ]
+        if (
+            row["cidade_destino"],
+            row["uf_destino"],
+            row["pais_destino"],
+        )
+        in reverse_local
+        else None,
+        axis=1,
+    )
+
+    trecho_df = trecho_df.dropna(subset=["local_origem_id", "local_destino_id"])
+
+    trecho_df["local_origem_id"] = trecho_df["local_origem_id"].astype(int)
+
+    trecho_df["local_destino_id"] = trecho_df["local_destino_id"].astype(int)
+
+    trecho_df["numero_diarias"] = trecho_df["numero_diarias"].str.replace(",", ".")
+
+    trecho_df["numero_diarias"] = trecho_df["numero_diarias"].astype(float)
+
+    cursor.executemany(
+        """
+        INSERT INTO trecho (viagem_id, local_origem_id, local_destino_id,
+        data_origem, data_destino, meio_transporte, numero_diarias, missao)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        list(
+            zip(
+                *map(
+                    trecho_df.get,
+                    [
+                        "viagem_id",
+                        "local_origem_id",
+                        "local_destino_id",
+                        "data_origem",
+                        "data_destino",
+                        "meio_transporte",
+                        "numero_diarias",
+                        "missao",
+                    ],
+                )
+            )
+        ),
+    )
+
     pagamento_df = pd.read_csv(pagamentoFileName, sep=";", encoding="latin-1")
+
+    # "Identificador do processo de viagem";"N�mero da Proposta (PCDP)";"C�digo do �rg�o superior";"Nome do �rg�o superior";"Codigo do �rg�o pagador";"Nome do �rgao pagador";"C�digo da unidade gestora pagadora";"Nome da unidade gestora pagadora";"Tipo de pagamento";"Valor"
+
+    pagamento_df.columns = [
+        "id_processo",
+        "pcdp",
+        "codigo_orgao_superior",
+        "nome_orgao_superior",
+        "codigo_orgao_pagador",
+        "nome_orgao_pagador",
+        "codigo_unidade_gestora_pagadora",
+        "nome_unidade_gestora_pagadora",
+        "tipo_pagamento",
+        "valor",
+    ]
+
+    pagamento_df = pagamento_df.replace({np.nan: None})
+
+    pagamento_df["viagem_id"] = pagamento_df.apply(
+        lambda row: reverse_viagem[str(row["id_processo"])]
+        if str(row["id_processo"]) in reverse_viagem
+        else None,
+        axis=1,
+    )
+
+    pagamento_df = pagamento_df.dropna(subset=["viagem_id"])
+
+    pagamento_df["viagem_id"] = pagamento_df["viagem_id"].astype(int)
+
+    pagamento_df["valor"] = pagamento_df["valor"].str.replace(",", ".")
+
+    pagamento_df["valor"] = pagamento_df["valor"].astype(float)
+
+    pagamento_df["orgao_pagador_id"] = pagamento_df.apply(
+        lambda row: row["codigo_orgao_pagador"]
+        if row["codigo_orgao_pagador"] is not None
+        else None,
+        axis=1,
+    )
+
+    pagamento_df = pagamento_df.dropna(subset=["orgao_pagador_id"])
+
+    pagamento_df["tipo_pagamento"] = pagamento_df["tipo_pagamento"].apply(
+        # upper, replace spaces with underscores and remove accents
+        lambda x: unidecode(x.upper())
+        .replace(" ", "_")
+        .replace(":", "")
+    )
+
+    cursor.executemany(
+        """
+        INSERT INTO pagamento (viagem_id, orgao_pagador_id, tipo_pagamento, valor)
+        VALUES (%s, %s, %s, %s)
+        """,
+        list(
+            zip(
+                *map(
+                    pagamento_df.get,
+                    [
+                        "viagem_id",
+                        "orgao_pagador_id",
+                        "tipo_pagamento",
+                        "valor",
+                    ],
+                )
+            )
+        ),
+    )
 
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv
-def load_data(fileNames, cursor):
+def load_data(fileNames, cursor, conn):
     # load_local(fileNames[1], fileNames[2], cursor)
-    # load_viagens(fileNames[0], fileNames[3], cursor)
+    # conn.commit()
+    load_viagens(fileNames[0], fileNames[3], cursor)
+    conn.commit()
     load_others(fileNames[1], fileNames[2], fileNames[0], cursor)
 
 
@@ -496,4 +693,4 @@ if __name__ == "__main__":
     cursor = {}
     with psycopg.connect(conn_url) as conn:
         with conn.cursor() as cursor:
-            load_data(fileNames, cursor)
+            load_data(fileNames, cursor, conn)

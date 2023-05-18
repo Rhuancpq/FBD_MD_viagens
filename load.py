@@ -2,31 +2,46 @@ import pandas as pd
 import sys
 import psycopg
 import numpy as np
+from datetime import datetime
 
 
-def load_local(fileName, cursor):
-    df = pd.read_csv(fileName, sep=";", encoding="latin-1")
-    orig_ida = df[["País - Origem ida", "UF - Origem ida", "Cidade - Origem ida"]]
-    orig_volta = df[
+# trecos.csv head:
+# "Identificador do processo de viagem ";"N�mero da Proposta (PCDP)";"Sequ�ncia Trecho";"Origem - Data";"Origem - Pa�s";"Origem - UF";"Origem - Cidade";"Destino - Data";"Destino - Pa�s";"Destino - UF";"Destino - Cidade";"Meio de transporte";"N�mero Di�rias";"Missao?"
+def load_local(passagensFileName, trechoFileName, cursor):
+    passagens_df = pd.read_csv(passagensFileName, sep=";", encoding="latin-1")
+    trecho_df = pd.read_csv(trechoFileName, sep=";", encoding="latin-1")
+
+    orig_ida = passagens_df[
+        ["País - Origem ida", "UF - Origem ida", "Cidade - Origem ida"]
+    ]
+    orig_volta = passagens_df[
         ["País - Origem volta", "UF - Origem volta", "Cidade - Origem volta"]
     ]
-    dest_ida = df[["País - Destino ida", "UF - Destino ida", "Cidade - Destino ida"]]
-    dest_volta = df[
+    dest_ida = passagens_df[
+        ["País - Destino ida", "UF - Destino ida", "Cidade - Destino ida"]
+    ]
+    dest_volta = passagens_df[
         ["Pais - Destino volta", "UF - Destino volta", "Cidade - Destino volta"]
     ]
+
+    trecho_orig = trecho_df[["Origem - País", "Origem - UF", "Origem - Cidade"]]
+
+    trecho_dest = trecho_df[["Destino - País", "Destino - UF", "Destino - Cidade"]]
 
     orig_ida.columns = ["pais", "estado", "cidade"]
     orig_volta.columns = ["pais", "estado", "cidade"]
     dest_ida.columns = ["pais", "estado", "cidade"]
     dest_volta.columns = ["pais", "estado", "cidade"]
+    trecho_orig.columns = ["pais", "estado", "cidade"]
+    trecho_dest.columns = ["pais", "estado", "cidade"]
 
-    local = pd.concat([orig_ida, orig_volta, dest_ida, dest_volta])
+    local = pd.concat(
+        [orig_ida, orig_volta, dest_ida, dest_volta, trecho_orig, trecho_dest]
+    )
 
     local = local.drop_duplicates()
 
     local["estado"] = np.where(local["estado"].isnull(), None, local["estado"])
-
-    print(local.head(10))
 
     cursor.executemany(
         "INSERT INTO local (pais, estado, cidade) VALUES (%s, %s, %s)",
@@ -34,24 +49,7 @@ def load_local(fileName, cursor):
     )
 
 
-# CREATE TABLE "orgao" (
-#   "id" integer PRIMARY KEY,
-#   "data_hora_criacao" timestamp NOT NULL,
-#   "nome" varchar NOT NULL,
-#   "codigo" varchar UNIQUE NOT NULL,
-#   "orgao_superior" integer,
-#   FOREIGN KEY ("orgao_superior") REFERENCES "orgao" ("id")
-# );
-
-
-# pagamento.csv head:
-# "Identificador do processo de viagem";"N�mero da Proposta (PCDP)";"C�digo do �rg�o superior";"Nome do �rg�o superior";"Codigo do �rg�o pagador";"Nome do �rgao pagador";"C�digo da unidade gestora pagadora";"Nome da unidade gestora pagadora";"Tipo de pagamento";"Valor"
-
-# viagem.csv head:
-# "Identificador do processo de viagem";"N�mero da Proposta (PCDP)";"Situa��o";"Viagem Urgente";"Justificativa Urg�ncia Viagem";"C�digo do �rg�o superior";"Nome do �rg�o superior";"C�digo �rg�o solicitante";"Nome �rg�o solicitante";"CPF viajante";"Nome";"Cargo";"Fun��o";"Descri��o Fun��o";"Per�odo - Data de in�cio";"Per�odo - Data de fim";"Destinos";"Motivo";"Valor di�rias";"Valor passagens";"Valor devolu��o";"Valor outros gastos"
-
-
-def load_servidor(pagamentoFileName, viagemFileName, cursor):
+def load_viagens(pagamentoFileName, viagemFileName, cursor):
     pagamento_df = pd.read_csv(pagamentoFileName, sep=";", encoding="latin-1")
     viagem_df = pd.read_csv(viagemFileName, sep=";", encoding="latin-1")
 
@@ -141,6 +139,9 @@ def load_servidor(pagamentoFileName, viagemFileName, cursor):
         list(zip(*map(funcao_df.get, ["nome", "orgao_superior"]))),
     )
 
+    del cargo_df
+    del funcao_df
+
     cargos_db = cursor.execute("SELECT id, nome, orgao_id FROM cargo").fetchall()
 
     cargos_db = pd.DataFrame(cargos_db, columns=["id", "nome", "orgao_id"])
@@ -191,16 +192,132 @@ def load_servidor(pagamentoFileName, viagemFileName, cursor):
         ),
     )
 
+    del servidor_df
 
-def load_cargo(fileName):
+    servidor_db = cursor.execute(
+        "SELECT id, nome, cpf, cargo_id, funcao_id FROM servidor"
+    ).fetchall()
+
+    servidor_db = pd.DataFrame(
+        servidor_db, columns=["id", "nome", "cpf", "cargo_id", "funcao_id"]
+    )
+
+    reverse_servidor = servidor_db.set_index(
+        ["nome", "cpf", "cargo_id", "funcao_id"]
+    ).to_dict()["id"]
+
+    viagem_df.columns = [
+        "id_processo",
+        "pcdp",
+        "situacao",
+        "urgente",
+        "justificativa_urgencia",
+        "orgao_superior",
+        "nome_orgao_superior",
+        "orgao_solicitante",
+        "nome_orgao_solicitante",
+        "cpf",
+        "nome",
+        "cargo",
+        "funcao",
+        "descricao_funcao",
+        "data_inicio",
+        "data_fim",
+        "destinos",
+        "motivo",
+        "valor_diarias",
+        "valor_passagens",
+        "valor_devolucao",
+        "valor_outros_gastos",
+    ]
+
+    viagem_df["cargo_id"] = viagem_df.apply(
+        lambda row: reverse_cargos[(row["cargo"], row["orgao_solicitante"])]
+        if (row["cargo"], row["orgao_solicitante"]) in reverse_cargos
+        else None,
+        axis=1,
+    )
+
+    viagem_df["funcao_id"] = viagem_df.apply(
+        lambda row: reverse_funcoes[(row["funcao"], row["orgao_solicitante"])]
+        if (row["funcao"], row["orgao_solicitante"]) in reverse_funcoes
+        else None,
+        axis=1,
+    )
+
+    viagem_df["servidor_id"] = viagem_df.apply(
+        lambda row: int(
+            reverse_servidor[
+                (row["nome"], row["cpf"], row["cargo_id"], row["funcao_id"])
+            ]
+        )
+        if (row["nome"], row["cpf"], row["cargo_id"], row["funcao_id"])
+        in reverse_servidor
+        else None,
+        axis=1,
+    )
+
+    viagem_df = viagem_df.dropna(subset=["servidor_id"])
+
+    viagem_df["servidor_id"] = viagem_df["servidor_id"].astype(int)
+
+    viagem_df["data_inicio"] = viagem_df["data_inicio"].apply(
+        lambda x: datetime.strptime(x, "%d/%m/%Y").strftime("%Y-%m-%d")
+    )
+
+    viagem_df["data_fim"] = viagem_df["data_fim"].apply(
+        lambda x: datetime.strptime(x, "%d/%m/%Y").strftime("%Y-%m-%d")
+    )
+
+    viagem_df["urgente"] = viagem_df["urgente"].apply(
+        lambda x: True if x == "SIM" else False
+    )
+
+    viagem_df = viagem_df.replace({np.nan: None})
+
+    viagem_df["situacao"] = viagem_df["situacao"].apply(
+        lambda x: x.replace(" ", "_").upper().replace("Ã", "A")
+    )
+
+    cursor.executemany(
+        """
+        INSERT INTO viagem (id_processo, situacao, urgente, justificativa_urgencia,
+        servidor_id, data_inicio, data_fim, motivo, numero_proposta)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+        list(
+            zip(
+                *map(
+                    viagem_df.get,
+                    [
+                        "id_processo",
+                        "situacao",
+                        "urgente",
+                        "justificativa_urgencia",
+                        "servidor_id",
+                        "data_inicio",
+                        "data_fim",
+                        "motivo",
+                        "pcdp",
+                    ],
+                )
+            )
+        ),
+    )
+
+    del viagem_df
+    del servidor_db
+    del cargos_db
+    del funcoes_db
+
+
+def load_pass(fileName, cursor):
     pass
 
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv
 def load_data(fileNames, cursor):
-    # load_local(fileNames[1], cursor)
-    load_servidor(fileNames[0], fileNames[3], cursor)
-    pass
+    load_local(fileNames[1], fileNames[2], cursor)
+    load_viagens(fileNames[0], fileNames[3], cursor)
 
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv em ordem

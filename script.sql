@@ -8,7 +8,7 @@ CREATE TYPE "situacao_viagem" AS ENUM (
 );
 
 CREATE TYPE "meio_transporte" AS ENUM (
-  'AERIO',
+  'AEREO',
   'RODOVIARIO',
   'FLUVIAL',
   'VEICULO_PROPRIO',
@@ -89,10 +89,10 @@ CREATE TABLE "passagem" (
   "id" SERIAL PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
   "viagem_id" integer NOT NULL,
-  "local_origem_ida_id" integer NOT NULL,
-  "local_destino_ida_id" integer NOT NULL,
-  "local_origem_volta_id" integer NOT NULL,
-  "local_destino_volta_id" integer NOT NULL,
+  "local_origem_ida_id" integer,
+  "local_destino_ida_id" integer,
+  "local_origem_volta_id" integer,
+  "local_destino_volta_id" integer,
   "valor" float NOT NULL DEFAULT 0,
   "taxa_servico" float NOT NULL DEFAULT 0,
   "data_hora_emissao" timestamp,
@@ -106,7 +106,6 @@ CREATE TABLE "passagem" (
 CREATE TABLE "trecho" (
   "id" SERIAL PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
-  "passagem_id" integer NOT NULL,
   "local_origem_id" integer NOT NULL,
   "data_origem" date NOT NULL,
   "local_destino_id" integer NOT NULL,
@@ -115,8 +114,7 @@ CREATE TABLE "trecho" (
   "numero_diarias" float,
   "missao" boolean NOT NULL DEFAULT false,
   FOREIGN KEY ("local_origem_id") REFERENCES "local" ("id"),
-  FOREIGN KEY ("local_destino_id") REFERENCES "local" ("id"),
-  FOREIGN KEY ("passagem_id") REFERENCES "passagem" ("id") ON DELETE CASCADE
+  FOREIGN KEY ("local_destino_id") REFERENCES "local" ("id")
 );
 
 CREATE TABLE "pagamento" (

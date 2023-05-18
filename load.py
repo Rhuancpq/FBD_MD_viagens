@@ -310,14 +310,181 @@ def load_viagens(pagamentoFileName, viagemFileName, cursor):
     del funcoes_db
 
 
-def load_pass(fileName, cursor):
-    pass
+# passagem.csv
+# "Identificador do processo de viagem";"N�mero da Proposta (PCDP)";"Meio de transporte";"Pa�s - Origem ida";"UF - Origem ida";"Cidade - Origem ida";"Pa�s - Destino ida";"UF - Destino ida";"Cidade - Destino ida";"Pa�s - Origem volta";"UF - Origem volta";"Cidade - Origem volta";"Pais - Destino volta";"UF - Destino volta";"Cidade - Destino volta";"Valor da passagem";"Taxa de servi�o";"Data da emiss�o/compra";"Hora da emiss�o/compra"
+def load_others(passagemFileName, trechoFileName, pagamentoFileName, cursor):
+    passagem_df = pd.read_csv(passagemFileName, sep=";", encoding="latin-1")
+
+    passagem_df.columns = [
+        "id_processo",
+        "pcdp",
+        "meio_transporte",
+        "pais_origem_ida",
+        "uf_origem_ida",
+        "cidade_origem_ida",
+        "pais_destino_ida",
+        "uf_destino_ida",
+        "cidade_destino_ida",
+        "pais_origem_volta",
+        "uf_origem_volta",
+        "cidade_origem_volta",
+        "pais_destino_volta",
+        "uf_destino_volta",
+        "cidade_destino_volta",
+        "valor_passagem",
+        "taxa_servico",
+        "data_emissao",
+        "hora_emissao",
+    ]
+
+    passagem_df = passagem_df.replace({np.nan: None})
+
+    passagem_df["data_hora_emissao"] = passagem_df.apply(
+        lambda row: datetime.strptime(
+            row["data_emissao"] + " " + row["hora_emissao"], "%d/%m/%Y %H:%M"
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        if row["data_emissao"] is not None and row["hora_emissao"] is not None
+        else None,
+        axis=1,
+    )
+
+    local_db = cursor.execute("SELECT id, cidade, estado, pais FROM local")
+
+    reverse_local = {}
+
+    for local in local_db:
+        reverse_local[(local[1], local[2], local[3])] = local[0]
+
+    passagem_df["local_origem_ida_id"] = passagem_df.apply(
+        lambda row: reverse_local[
+            (row["cidade_origem_ida"], row["uf_origem_ida"], row["pais_origem_ida"])
+        ]
+        if (
+            row["cidade_origem_ida"],
+            row["uf_origem_ida"],
+            row["pais_origem_ida"],
+        )
+        in reverse_local
+        else None,
+        axis=1,
+    )
+
+    passagem_df["local_destino_ida_id"] = passagem_df.apply(
+        lambda row: reverse_local[
+            (row["cidade_destino_ida"], row["uf_destino_ida"], row["pais_destino_ida"])
+        ]
+        if (
+            row["cidade_destino_ida"],
+            row["uf_destino_ida"],
+            row["pais_destino_ida"],
+        )
+        in reverse_local
+        else None,
+        axis=1,
+    )
+
+    passagem_df["local_origem_volta_id"] = passagem_df.apply(
+        lambda row: reverse_local[
+            (
+                row["cidade_origem_volta"],
+                row["uf_origem_volta"],
+                row["pais_origem_volta"],
+            )
+        ]
+        if (
+            row["cidade_origem_volta"],
+            row["uf_origem_volta"],
+            row["pais_origem_volta"],
+        )
+        in reverse_local
+        else None,
+        axis=1,
+    )
+
+    passagem_df["local_destino_volta_id"] = passagem_df.apply(
+        lambda row: reverse_local[
+            (
+                row["cidade_destino_volta"],
+                row["uf_destino_volta"],
+                row["pais_destino_volta"],
+            )
+        ]
+        if (
+            row["cidade_destino_volta"],
+            row["uf_destino_volta"],
+            row["pais_destino_volta"],
+        )
+        in reverse_local
+        else None,
+        axis=1,
+    )
+
+    viagem_db = cursor.execute("SELECT id, id_processo FROM viagem")
+
+    reverse_viagem = {}
+
+    for viagem in viagem_db:
+        reverse_viagem[viagem[1]] = viagem[0]
+
+    passagem_df["viagem_id"] = passagem_df.apply(
+        lambda row: reverse_viagem[str(row["id_processo"])]
+        if str(row["id_processo"]) in reverse_viagem
+        else None,
+        axis=1,
+    )
+
+    passagem_df = passagem_df.dropna(subset=["viagem_id"])
+
+    passagem_df["viagem_id"] = passagem_df["viagem_id"].astype(int)
+
+    passagem_df["valor_passagem"] = passagem_df["valor_passagem"].str.replace(",", ".")
+
+    passagem_df["valor_passagem"] = passagem_df["valor_passagem"].astype(float)
+
+    passagem_df["taxa_servico"] = passagem_df["taxa_servico"].str.replace(",", ".")
+
+    passagem_df["taxa_servico"] = passagem_df["taxa_servico"].astype(float)
+
+    print(passagem_df.head(5))
+
+    # cursor.executemany(
+    #     """
+    #     INSERT INTO passagem (viagem_id, local_origem_ida_id,
+    #     local_destino_ida_id, local_origem_volta_id, local_destino_volta_id,
+    #     valor, taxa_servico, data_hora_emissao)
+    #     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    #     """,
+    #     list(
+    #         zip(
+    #             *map(
+    #                 passagem_df.get,
+    #                 [
+    #                     "viagem_id",
+    #                     "local_origem_ida_id",
+    #                     "local_destino_ida_id",
+    #                     "local_origem_volta_id",
+    #                     "local_destino_volta_id",
+    #                     "valor_passagem",
+    #                     "taxa_servico",
+    #                     "data_hora_emissao",
+    #                 ],
+    #             )
+    #         )
+    #     ),
+    # )
+
+    # TODO trecho
+    trecho_df = pd.read_csv(trechoFileName, sep=";", encoding="latin-1")
+
+    # TODO pagamento
+    pagamento_df = pd.read_csv(pagamentoFileName, sep=";", encoding="latin-1")
 
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv
 def load_data(fileNames, cursor):
-    load_local(fileNames[1], fileNames[2], cursor)
-    load_viagens(fileNames[0], fileNames[3], cursor)
+    # load_local(fileNames[1], fileNames[2], cursor)
+    # load_viagens(fileNames[0], fileNames[3], cursor)
+    load_others(fileNames[1], fileNames[2], fileNames[0], cursor)
 
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv em ordem

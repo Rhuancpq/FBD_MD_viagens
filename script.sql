@@ -106,15 +106,17 @@ CREATE TABLE "passagem" (
 CREATE TABLE "trecho" (
   "id" SERIAL PRIMARY KEY,
   "data_hora_criacao" timestamp DEFAULT current_timestamp,
+  "viagem_id" integer NOT NULL,
   "local_origem_id" integer NOT NULL,
   "data_origem" date NOT NULL,
   "local_destino_id" integer NOT NULL,
   "data_destino" date NOT NULL,
-  "meio_tranposrte" meio_transporte,
+  "meio_transporte" meio_transporte,
   "numero_diarias" float,
   "missao" boolean NOT NULL DEFAULT false,
   FOREIGN KEY ("local_origem_id") REFERENCES "local" ("id"),
   FOREIGN KEY ("local_destino_id") REFERENCES "local" ("id")
+  FOREIGN KEY ("viagem_id") REFERENCES "viagem" ("id") ON DELETE CASCADE,
 );
 
 CREATE TABLE "pagamento" (

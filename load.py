@@ -677,8 +677,8 @@ def load_others(passagemFileName, trechoFileName, pagamentoFileName, cursor):
 
 # filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv
 def load_data(fileNames, cursor, conn):
-    # load_local(fileNames[1], fileNames[2], cursor)
-    # conn.commit()
+    load_local(fileNames[1], fileNames[2], cursor)
+    conn.commit()
     load_viagens(fileNames[0], fileNames[3], cursor)
     conn.commit()
     load_others(fileNames[1], fileNames[2], fileNames[0], cursor)

@@ -115,7 +115,6 @@ call calcular_gravar_taxa_servico(20);
 
 
 
-
 -- FUNCTION
 
 -- CRIA FUNCTION QUE RETORNA OS PAGAMENTOS DE PASSAGEM, DIÁRIA OU SEGURO, O QUE HOUVER, REALIZADOS PARA UMA VIAGEM
@@ -163,6 +162,24 @@ begin
 end;
 $$;
 
+-- CRIA FUNCTION QUE RETORNA TRIGGER QUE REMOVE VALOR "SEM INFORMAÇÃO" DE LOCAL
+create or replace function remover_sem_informacao_local()
+returns trigger
+language plpgsql as $$
+begin
+	update "local"  
+    set cidade = null 
+    where cidade = 'Sem Informação';
+   	update "local"
+    set estado = null 
+    where estado = 'Sem Informação';
+    update "local"  
+    set pais = null 
+    where pais = 'Sem Informação';
+    commit;
+end;
+$$;
+
 
 
 
@@ -182,6 +199,13 @@ create trigger triguer_desconsiderar_valores_negativos_pagamento
 after insert or update on pagamento
 for each row
 execute function desconsiderar_valores_negativos_pagamento();
+
+
+-- CRIA TRIGGER QUE INVOCA FUNCTION PARA REMOVER VALOR "SEM INFORMAÇÃO" DE LOCAL
+create trigger triguer_remover_sem_informacao_local
+after insert or update on "local"
+for each row
+execute function remover_sem_informacao_local();
 
 
 

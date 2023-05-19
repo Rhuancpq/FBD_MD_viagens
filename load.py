@@ -1,6 +1,7 @@
 import pandas as pd
 import sys
-import psycopg
+#import psycopg
+import psycopg2
 import numpy as np
 from datetime import datetime
 from unidecode import unidecode
@@ -684,14 +685,14 @@ def load_data(fileNames, cursor, conn):
     load_others(fileNames[1], fileNames[2], fileNames[0], cursor)
 
 
-# filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv em ordem
-# python3 load.py 2022_Pagamento.csv 2022_Passagem.csv 2022_Trecho.csv 2022_Viagem.csv postgresql://postgres:ppcaunb@206.189.206.44:5454/viagens 
 if __name__ == "__main__":
     # get from command line
-    fileNames = sys.argv[1:-1]
-    conn_url = sys.argv[-1]
+    fileNames = ["/Users/brunomarquete/Desktop/FDB - Viagens/FBD_MD_viagens/2022_Pagamento.csv",  
+                 "/Users/brunomarquete/Desktop/FDB - Viagens/FBD_MD_viagens/2022_Passagem.csv", 
+                 "/Users/brunomarquete/Desktop/FDB - Viagens/FBD_MD_viagens/2022_Trecho.csv", 
+                 "/Users/brunomarquete/Desktop/FDB - Viagens/FBD_MD_viagens/2022_Viagem.csv"]
     cursor = {}
-    with psycopg.connect(conn_url) as conn:
+    with psycopg2.connect("dbname=viagens user=postgres password=ppcaunb host=206.189.206.44 port=5454") as conn:
         with conn.cursor() as cursor:
             load_data(fileNames, cursor, conn)
 

@@ -2,13 +2,12 @@
 -- CONSULTAS
 
 
--- TOP 10 ÓRGÃOS QUE MAIS GASTARAM EM 2022
+-- TOP 10 ÓRGÃOS QUE MAIS GASTARAM
 select upper(org.nome), round(sum(pag.valor)::numeric, 2) as gasto_total 
 from pagamento pag
 	inner join orgao_subordinado org on pag.orgao_pagador_id = org.codigo 
 	inner join viagem viag on pag.viagem_id = viag.id
 	inner join passagem pas on pas.viagem_id = viag.id
-where date_part('year', pas.data_hora_emissao) = 2022
 group by org.nome
 having sum(pag.valor) > 0
 order by gasto_total desc
@@ -78,7 +77,6 @@ where
 	destino_volta.id in (select id from "local" l where l.cidade = 'São Paulo' and l.estado = 'São Paulo' and l.pais = 'Brasil'); 
          
 
-         
          
          
 -- PROCEDURE

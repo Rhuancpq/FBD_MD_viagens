@@ -3,7 +3,8 @@
 
 
 -- TOP 10 ÓRGÃOS QUE MAIS GASTARAM
-select upper(org.nome), round(sum(pag.valor)::numeric, 2) as gasto_total 
+select upper(org.nome) as orgao, 
+	   round(sum(pag.valor)::numeric, 2) as gasto_total 
 from pagamento pag
 	inner join orgao_subordinado org on pag.orgao_pagador_id = org.codigo 
 	inner join viagem viag on pag.viagem_id = viag.id
@@ -15,7 +16,8 @@ limit 10;
 
 
 -- TOP 10 ÓRGÃOS COM MAIS PASSAGENS EMITIDAS EM URGÊNCIA
-select upper(org.nome), count(viag.urgente) as total_urgencias
+select upper(org.nome) as orgao, 
+       count(viag.urgente) as total_urgencias
 from pagamento pag
 	inner join orgao_subordinado org on pag.orgao_pagador_id = org.codigo 
 	inner join viagem viag on pag.viagem_id = viag.id
@@ -27,7 +29,9 @@ limit 10;
 
 
 -- TOP 10 SERVIDORES QUE MAIS REALIZARAM VIAGENS
-select ser.nome, upper(org.nome), count(viag.id) as qtd_viagens
+select ser.nome, 
+       upper(org.nome) as orgao, 
+       count(viag.id) as qtd_viagens
 from viagem viag
 	inner join passagem pas on pas.viagem_id = viag.id
 	inner join servidor ser on viag.servidor_id = ser.id
@@ -40,10 +44,13 @@ limit 10;
 
 
 -- TOP 10 DESTINOS DE VIAGENS
-select destinos.destino, count(destinos.destino) as quantidade 
+select destinos.destino, 
+       count(destinos.destino) as quantidade 
 from 
 (
-	select concat(destino_ida.cidade, ' - ',destino_ida.estado, ' - ', destino_ida.pais) as destino
+	select concat(destino_ida.cidade, 
+	              ' - ',destino_ida.estado, 
+	              ' - ', destino_ida.pais) as destino
 	from viagem viag
 		inner join passagem pas on pas.viagem_id = viag.id
 		inner join "local" destino_ida on pas.local_destino_ida_id = destino_ida.id
@@ -51,7 +58,9 @@ from
 	
 	union all
 	
-	select concat(destino_volta.cidade, ' - ',destino_volta.estado, ' - ', destino_volta.pais) as destino
+	select concat(destino_volta.cidade, 
+	              ' - ',destino_volta.estado,
+	              ' - ', destino_volta.pais) as destino
 	from viagem viag
 		inner join passagem pas on pas.viagem_id = viag.id
 		inner join "local" destino_volta on pas.local_destino_volta_id = destino_volta.id
@@ -72,9 +81,17 @@ from viagem viag
 	left join "local" origem_volta on pass.local_origem_ida_id = origem_volta.id 
 	left join "local" destino_volta on pass.local_origem_ida_id = destino_volta.id
 where 
-	destino_ida.id in (select id from "local" l where l.cidade = 'São Paulo' and l.estado = 'São Paulo' and l.pais = 'Brasil') 
+	destino_ida.id in (select id 
+	                   from "local" l 
+	                   where l.cidade = 'São Paulo' 
+	                         and l.estado = 'São Paulo' 
+	                         and l.pais = 'Brasil') 
 	or
-	destino_volta.id in (select id from "local" l where l.cidade = 'São Paulo' and l.estado = 'São Paulo' and l.pais = 'Brasil'); 
+	destino_volta.id in (select id 
+                         from "local" l 
+                         where l.cidade = 'São Paulo' 
+                         and l.estado = 'São Paulo' 
+                         and l.pais = 'Brasil'); 
          
 
          
@@ -205,3 +222,5 @@ from viagem v
 	 inner join "local" destino_ida on p.local_origem_ida_id = destino_ida.id 
 	 inner join "local" origem_volta on p.local_origem_ida_id = origem_volta.id 
 	 inner join "local" destino_volta on p.local_origem_ida_id = destino_volta.id;
+	
+	select * from viagens_servidores;

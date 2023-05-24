@@ -694,14 +694,3 @@ if __name__ == "__main__":
     with psycopg.connect(conn_url) as conn:
         with conn.cursor() as cursor:
             load_data(fileNames, cursor, conn)
-
-# filenames = "pagamento.csv" "passagem.csv" "trecho.csv" "viagem.csv em ordem
-# python3 load.py 2022_Pagamento.csv 2022_Passagem.csv 2022_Trecho.csv 2022_Viagem.csv postgresql://postgres:example@localhost:5432/viagens
-# if __name__ == "__main__":
-#     # get from command line
-#     fileNames = sys.argv[1:-1]
-#     conn_url = sys.argv[-1]
-#     cursor = {}
-#     with psycopg.connect(conn_url) as conn:
-#         with conn.cursor() as cursor:
-#             load_data(fileNames, cursor, conn)

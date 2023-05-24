@@ -2,39 +2,13 @@
 -- CONSULTAS
 
 
--- TOP 10 ÓRGÃOS QUE MAIS GASTARAM COM PASSAGENS, DIÁRIAS E SEGUROS EMITIDOS EM 2022
-select org.nome, sum(pag.valor) as gasto_total 
+-- TOP 10 ÓRGÃOS QUE MAIS GASTARAM
+select upper(org.nome) as orgao, 
+	   round(sum(pag.valor)::numeric, 2) as gasto_total 
 from pagamento pag
-	inner join orgao org on pag.orgao_pagador_id = org.id
+	inner join orgao_subordinado org on pag.orgao_pagador_id = org.codigo 
 	inner join viagem viag on pag.viagem_id = viag.id
 	inner join passagem pas on pas.viagem_id = viag.id
-where date_part('year', pas.data_hora_emissao) = 2022
-group by org.nome
-having sum(pag.valor) > 0
-order by gasto_total desc
-limit 10;
-
-
--- TOP 10 ÓRGÃOS QUE MAIS GASTARAM COM PASSAGENS EMITIDAS EM 2022
-select org.nome, sum(pag.valor) as gasto_total 
-from pagamento pag
-	inner join orgao org on pag.orgao_pagador_id = org.id
-	inner join viagem viag on pag.viagem_id = viag.id
-	inner join passagem pas on pas.viagem_id = viag.id
-where pag.tipo_pagamento = 'PASSAGEM' and date_part('year', pas.data_hora_emissao) = 2022
-group by org.nome
-having sum(pag.valor) > 0
-order by gasto_total desc
-limit 10;
-
-
--- TOP 10 ÓRGÃOS QUE MAIS GASTARAM COM DIÁRIAS EMITIDAS EM 2022
-select org.nome, sum(pag.valor) as gasto_total 
-from pagamento pag
-	inner join orgao org on pag.orgao_pagador_id = org.id
-	inner join viagem viag on pag.viagem_id = viag.id
-	inner join passagem pas on pas.viagem_id = viag.id
-where pag.tipo_pagamento = 'DIARIAS' and date_part('year', pas.data_hora_emissao) = 2022
 group by org.nome
 having sum(pag.valor) > 0
 order by gasto_total desc
@@ -42,10 +16,11 @@ limit 10;
 
 
 -- TOP 10 ÓRGÃOS COM MAIS PASSAGENS EMITIDAS EM URGÊNCIA
-select org.nome, count(viag.urgente) as total_urgencias
-from viagem viag
-	inner join servidor ser on viag.servidor_id = ser.id 
-	inner join orgao org on ser.orgao_id = org.id 
+select upper(org.nome) as orgao, 
+       count(viag.urgente) as total_urgencias
+from pagamento pag
+	inner join orgao_subordinado org on pag.orgao_pagador_id = org.codigo 
+	inner join viagem viag on pag.viagem_id = viag.id
 where viag.urgente = true
 group by org.nome
 having count(viag.urgente) > 0
@@ -53,44 +28,43 @@ order by total_urgencias desc
 limit 10;
 
 
--- TOP 10 SERVIDORES QUE MAIS REALIZARAM VIAGENS COM PASSAGENS EMITIDAS EM 2022
-select ser.nome, count(viag.id) as qtd_viagens
-from viagem viag
-	inner join passagem pas on pas.viagem_id = viag.id
-	inner join servidor ser on viag.servidor_id = ser.id
-where date_part('year', pas.data_hora_emissao) = 2022
-group by ser.nome
-having count(viag.id) > 0
-order by qtd_viagens desc
-limit 10;     
-
-
 -- TOP 10 SERVIDORES QUE MAIS REALIZARAM VIAGENS
-select ser.nome, count(viag.id) as qtd_viagens
+select ser.nome, 
+       upper(org.nome) as orgao, 
+       count(viag.id) as qtd_viagens
 from viagem viag
 	inner join passagem pas on pas.viagem_id = viag.id
 	inner join servidor ser on viag.servidor_id = ser.id
-group by ser.nome
+	inner join cargo car on ser.cargo_id = car.id
+	inner join orgao_subordinado org on car.orgao_id = org.codigo 
+group by ser.nome, org.nome
 having count(viag.id) > 0
 order by qtd_viagens desc
-limit 10;     
+limit 10;        
 
 
 -- TOP 10 DESTINOS DE VIAGENS
-select destinos.destino, count(destinos.destino) as quantidade 
+select destinos.destino, 
+       count(destinos.destino) as quantidade 
 from 
 (
-	select concat(destino_ida.cidade, ' - ',destino_ida.estado, ' - ', destino_ida.pais) as destino
+	select concat(destino_ida.cidade, 
+	              ' - ',destino_ida.estado, 
+	              ' - ', destino_ida.pais) as destino
 	from viagem viag
 		inner join passagem pas on pas.viagem_id = viag.id
 		inner join "local" destino_ida on pas.local_destino_ida_id = destino_ida.id
-		
+	where destino_ida.cidade <> 'Sem Informação'
+	
 	union all
 	
-	select concat(destino_volta.cidade, ' - ',destino_volta.estado, ' - ', destino_volta.pais) as destino
+	select concat(destino_volta.cidade, 
+	              ' - ',destino_volta.estado,
+	              ' - ', destino_volta.pais) as destino
 	from viagem viag
 		inner join passagem pas on pas.viagem_id = viag.id
 		inner join "local" destino_volta on pas.local_destino_volta_id = destino_volta.id
+	where destino_volta.cidade <> 'Sem Informação'
 ) as destinos
 group by destinos.destino
 having count(destinos.destino) > 0
@@ -98,27 +72,28 @@ order by quantidade desc
 limit 10; 
 
 
--- VALOR MÉDIO DAS PASSAGENS EMITIDAS DE BRASÍLIA A SÃO PAULO EM 2022 e 2023
-select avg(pass.valor) as media_valor
+-- VALOR MÉDIO DAS PASSAGENS EMITIDAS COM DESTINO SÃO PAULO
+select round(avg(pass.valor)::numeric, 2) as media
 from viagem viag 
 	inner join passagem pass on pass.viagem_id = viag.id
-    inner join "local" origem_ida on pass.local_origem_ida_id = origem_ida.id 
-	inner join "local" destino_ida on pass.local_origem_ida_id = destino_ida.id 
-	inner join "local" origem_volta on pass.local_origem_ida_id = origem_volta.id 
-	inner join "local" destino_volta on pass.local_origem_ida_id = destino_volta.id
-where date_part('year', pass.data_hora_emissao) in (2022, 2023)
-      and (
-      	  	origem_ida.id = (select id from "local" l where l.cidade = 'Brasília' and l.estado = 'DF' and l.pais = 'Brasil')
-          	and destino_ida.id = (select id from "local" l where l.cidade = 'São Paulo' and l.estado = 'SP' and l.pais = 'Brasil')
-          ) 
-          or
-          (
-      	  	origem_volta.id = (select id from "local" l where l.cidade = 'Brasília' and l.estado = 'DF' and l.pais = 'Brasil')
-          	and destino_volta.id = (select id from "local" l where l.cidade = 'São Paulo' and l.estado = 'SP' and l.pais = 'Brasil')
-          ); 
+    left join "local" origem_ida on pass.local_origem_ida_id = origem_ida.id 
+	left join "local" destino_ida on pass.local_origem_ida_id = destino_ida.id 
+	left join "local" origem_volta on pass.local_origem_ida_id = origem_volta.id 
+	left join "local" destino_volta on pass.local_origem_ida_id = destino_volta.id
+where 
+	destino_ida.id in (select id 
+	                   from "local" l 
+	                   where l.cidade = 'São Paulo' 
+	                         and l.estado = 'São Paulo' 
+	                         and l.pais = 'Brasil') 
+	or
+	destino_volta.id in (select id 
+                         from "local" l 
+                         where l.cidade = 'São Paulo' 
+                         and l.estado = 'São Paulo' 
+                         and l.pais = 'Brasil'); 
          
 
-         
          
          
 -- PROCEDURE
@@ -140,7 +115,6 @@ call calcular_gravar_taxa_servico(20);
 
 
 
-
 -- FUNCTION
 
 -- CRIA FUNCTION QUE RETORNA OS PAGAMENTOS DE PASSAGEM, DIÁRIA OU SEGURO, O QUE HOUVER, REALIZADOS PARA UMA VIAGEM
@@ -155,7 +129,7 @@ end;
 $$;
 
 -- INVOCA A FUNCTION CRIADA PARA A VIAGEM DE ID 50
-call pagamentos_viagem(50); 
+call pagamentos_viagem(1); 
 
 
 -- CRIA FUNCTION QUE RETORNA TRIGGER QUE DESCONSIDERA VALORES NEGATIVOS NO VALOR E TAXA DE SERVIÇO DE PASSAGENS 
@@ -188,6 +162,24 @@ begin
 end;
 $$;
 
+-- CRIA FUNCTION QUE RETORNA TRIGGER QUE REMOVE VALOR "SEM INFORMAÇÃO" DE LOCAL
+create or replace function remover_sem_informacao_local()
+returns trigger
+language plpgsql as $$
+begin
+	update "local"  
+    set cidade = null 
+    where cidade = 'Sem Informação';
+   	update "local"
+    set estado = null 
+    where estado = 'Sem Informação';
+    update "local"  
+    set pais = null 
+    where pais = 'Sem Informação';
+    commit;
+end;
+$$;
+
 
 
 
@@ -207,6 +199,13 @@ create trigger triguer_desconsiderar_valores_negativos_pagamento
 after insert or update on pagamento
 for each row
 execute function desconsiderar_valores_negativos_pagamento();
+
+
+-- CRIA TRIGGER QUE INVOCA FUNCTION PARA REMOVER VALOR "SEM INFORMAÇÃO" DE LOCAL
+create trigger triguer_remover_sem_informacao_local
+after insert or update on "local"
+for each row
+execute function remover_sem_informacao_local();
 
 
 
@@ -241,9 +240,11 @@ select v.id_processo,
 from viagem v
 	 inner join servidor s on v.servidor_id = s.id
 	 left join cargo c on v.servidor_id  = c.id
-	 left join orgao o on s.orgao_id  = o.id
+	 left join orgao_subordinado o on c.orgao_id  = o.codigo
 	 inner join passagem p on p.viagem_id = v.id
 	 inner join "local" origem_ida on p.local_origem_ida_id = origem_ida.id 
 	 inner join "local" destino_ida on p.local_origem_ida_id = destino_ida.id 
 	 inner join "local" origem_volta on p.local_origem_ida_id = origem_volta.id 
 	 inner join "local" destino_volta on p.local_origem_ida_id = destino_volta.id;
+	
+	select * from viagens_servidores;
